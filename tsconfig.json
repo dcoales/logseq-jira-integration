@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "lib": [
+      "es2021",
+      "dom"
+    ],
+    "module": "commonjs",
+    "target": "es2021",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "moduleResolution": "node"
+  }
+}
