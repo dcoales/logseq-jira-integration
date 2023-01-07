@@ -6,32 +6,56 @@ import { SettingSchemaDesc } from '@logseq/libs/dist/LSPlugin.user';
  * entry
  */
 
-const jiraRegExp: RegExp = /{{{j (?<jira>[0-9]+)}}}(\(#.*?\))?/g;
+const jiraRegExp: RegExp = /{{{j (?<jira>[0-9]+)}}}( ".*?" )?(\(#.*?\))?/g;
 const pageSize: number = 50;
+interface Params {
+    scope?:string;
+    full?:boolean;
+};
+
+const params: Params = {full:false};
 
 function main() {
 
     logseq.useSettingsSchema(settings);
 
-    logseq.Editor.registerSlashCommand('Get Jira Details for Selection', (_) => {
-        return updateJiras('selection');
+    logseq.Editor.registerSlashCommand('Get Summary Jira Details for Selection', (_) => {
+        params.full = false;
+        params.scope = 'page';
+        return updateJiras();
+    })
+
+    logseq.Editor.registerSlashCommand('Get Summary Jira Details for Page', (_) => {
+        params.full = false;
+        params.scope = 'page';
+        return updateJiras();
+    })
+
+    logseq.Editor.registerSlashCommand('Get Full Jira Details for Selection', (_) => {
+        params.full = true;
+        params.scope = 'selection'
+        return updateJiras();
+    })
+
+    logseq.Editor.registerSlashCommand('Get Full Jira Details for Page', (_) => {
+        params.full = true;
+        params.scope='page';
+        return updateJiras();
     })
 
     logseq.Editor.registerSlashCommand('Create Jira', (_) => {
         return createJira();
     })
 
-    logseq.Editor.registerSlashCommand('Get Jira Details for Page', (_) => {
-        return updateJiras('page');
-    })
-
     logseq.App.registerCommand('jiraDetails', {
         key: 'jiraDetails',
-        label: 'Get Jira Details for Selection',
+        label: 'Get Summary Jira Details for Selection',
         desc: 'Add up to date status information to Jiras',
         keybinding: {binding: 'mod+alt+j'}
     }, (e) => {
-        return updateJiras('selection');
+        params.full = false;
+        params.scope = 'selection';
+        return updateJiras();
     })
 }
 
@@ -111,9 +135,9 @@ async function createJiraViaAPI(summary:string, description:string, type:string 
 }
 
 
-async function updateJiras(scope: string){
+async function updateJiras(){
     try {
-        if (scope === 'page'){
+        if (params.scope === 'page'){
             await updatePage();
         } else {
             await updateSelection();
@@ -192,8 +216,10 @@ function getUpdatedJiraString(jiraNumber:string, jira:any):string{
     const jiraString = "{{{j " + jiraNumber + "}}}";
     let statusString = "jira not found";
     const parts: string[] = [];
+    let summary: string = "";
     if (jira){
         // Get the version
+        console.log(jira);
         const versions = jira.fields.customfield_10303;
         const versionList = versions ? Array.isArray(versions) ? versions.map(v => makeTag(v.name)) : [versions.name] : null;
         parts.push(versionList ?  versionList.join(" ") : "#unassigned");
@@ -205,9 +231,11 @@ function getUpdatedJiraString(jiraNumber:string, jira:any):string{
         const labels = jira.fields.labels;
         if (labels && labels.includes('core')) parts.push('⭐');
         statusString = parts.join(" ");
+
+        summary = params.full ? " \"" + jira.fields.summary + "\" ": "";
     }
 
-    return jiraString + "(" + statusString + getTime() + ")";
+    return jiraString  + summary + "(" + statusString + getTime() + ")";
 
 }
 
@@ -269,7 +297,7 @@ async function getPageOfJiras(jiraList:string,i:number):Promise<any[]>{
     // Build the jira lists for the in clauses
     let jql:string = "key in (" + jiraList + ")";
 
-    const url:string = `${logseq.settings?.jiraURL}/rest/api/2/search?jql=${jql}&fields=status,labels,customfield_10303&maxResults=${pageSize}`;
+    const url:string = `${logseq.settings?.jiraURL}/rest/api/2/search?jql=${jql}&fields=status,labels,customfield_10303,summary`;
 
     const response = await fetch(url, {
         method: 'GET',
